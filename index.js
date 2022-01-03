@@ -17,4 +17,4 @@ app.get("/",async (req,res)=>{
 
 let PORT = "8081";
 
-app.listen(proccess.env.PORT || PORT)
+app.listen(process.env.PORT || PORT)
