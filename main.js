@@ -29,12 +29,12 @@ class HelloWorld extends HTMLElement {
   }
   async updateSome() {
     let container = this.shadowRoot.querySelector(".container");
-    let some = await fetch("https://jsonplaceholder.typicode.com/users").then(
-      (res) => res.json()
-    );
+    let some = await fetch(
+      "https://yehudaba.wixsite.com/my-site-2/_functions/items"
+    ).then((res) => res.json());
     let res = some
       .map((item, i) => {
-        return `<p id="id-${i}" class="draggable" draggable="true">${i}</p>`;
+        return `<p id="id-${i}" class="draggable" draggable="true">${item.slug}</p>`;
       })
       .join("");
 
@@ -64,6 +64,10 @@ class HelloWorld extends HTMLElement {
         if (afterElement == null) {
           container.appendChild(draggable);
         } else {
+          fetch(
+            `https://yehudaba.wixsite.com/my-site-2/_functions/update/${draggable.innerText}/${afterElement.innerText}`
+          );
+          console.log(afterElement.innerText);
           container.insertBefore(draggable, afterElement);
         }
       });
