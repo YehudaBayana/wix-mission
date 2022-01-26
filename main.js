@@ -1,6 +1,18 @@
 let some = [1, 2, 3, 4, 5, 6];
 const template = document.createElement("template");
 template.innerHTML = `<style>
+p{
+    font-size: 17px;
+}
+
+.wrapper{
+    display: flex;
+    flex-direction: column;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+}
+
 .container {
 background-color: #333;
 padding: 1rem;
@@ -8,6 +20,7 @@ margin-top: 1rem;
 }
 
 .draggable {
+    position: relative;
 padding: 1rem;
 background-color: white;
 border: 1px solid black;
@@ -17,60 +30,133 @@ cursor: move;
 .draggable.dragging {
 opacity: .5;
 }
+
+#button{
+    background-color: #008CBA;
+  border: none;
+  color: white;
+  padding: 15px 32px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 16px;
+  margin: 4px 2px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+#button:hover{
+	opacity:0.5;
+}
+
+.subject{
+    font-family: sans-serif;
+    font-weight: bold;
+    font-size: 16px;
+    color: white;
+    position: absolute;
+    top: -35px;
+}
 </style>
-<button id="button">update<button/>
+<div class="wrapper">
 <div class="container">
 
-</div>`;
-class HelloWorld extends HTMLElement {
+</div>
+<button id="button">update order</button>
+</div>
+`;
+class SortableList extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
     this.shadowRoot.appendChild(template.content.cloneNode(true));
+    this.container = this.shadowRoot.querySelector(".container");
+    this.uniqueId = "newRuleId";
   }
-  async updateSome() {
-    let container = this.shadowRoot.querySelector(".container");
-    let some = await fetch(
-      "https://yehudaba.wixsite.com/my-site-2/_functions/items"
-    ).then((res) => res.json());
 
-    let res = some
+  static get observedAttributes() {
+    return ["list-data"];
+  }
+
+  attributeChangedCallback(name, oldValue, newValue) {
+    if (name === "list-data") {
+      this.listData = newValue;
+    }
+  }
+
+  get listData() {
+    return this._listData;
+  }
+
+  set listData(d) {
+    this._listData = JSON.parse(d);
+
+    sessionStorage.setItem("listData", d);
+    if (this._connected) this.updateList();
+  }
+
+  async updateList() {
+    let list = JSON.parse(this.listData);
+    if (!list.some((e) => e._id === this.uniqueId)) {
+      list.unshift({
+        _id: this.uniqueId,
+        order: -1,
+        title: "new rule here",
+      });
+    }
+    list.sort((a, b) => (a.order > b.order ? 1 : b.order > a.order ? -1 : 0));
+    let res = list
       .map((item, i) => {
-        return `<p id="id-${i}" class="draggable" draggable="true" data-id="${item._id}">${item.slug}</p>`;
+        let jsonObj = JSON.stringify(item);
+        return `<p ${
+          item._id === this.uniqueId
+            ? `style="background-color:#1a6d9d; color:white;"`
+            : null
+        } ${item.subject? `style="margin-top:60px"`:""} id="id-${i}" class="draggable" draggable="true" data-id=${
+          item._id
+        }>  ${
+          item.subject
+            ? `<span class="subject">${item.subject}</span>`
+            : ""
+        } ${item.title}</p>`;
       })
       .join("");
 
-    container.innerHTML = res;
+    this.container.innerHTML = res;
+    for (let i = 0; i < this.container.children.length; i++) {
+      if (!this.container.children[i].innerText) {
+        this.container.children[i].remove();
+      }
+    }
   }
 
   async connectedCallback() {
-    await this.updateSome();
+    let savedData = sessionStorage.getItem("listData");
+    if (savedData && savedData !== "undefined" && !this._listData)
+      this._listData = savedData;
+    this._connected = true;
+    if (this._listData) {
+      await this.updateList();
+    }
+
     this.draggables = this.shadowRoot.querySelectorAll(".draggable");
     this.container = this.shadowRoot.querySelector(".container");
-    this.button = this.shadowRoot.getElementById("button");
+    this.updateBtn = this.shadowRoot.getElementById("button");
 
-    this.button.addEventListener("click", () => {
+    this.updateBtn.addEventListener("click", () => {
       let allElements = this.container.children;
-      //   console.log(allElements[0].getAttribute("data-id"));
       let toSend = [];
       for (let i = 0; i < allElements.length; i++) {
-        toSend[i] = {};
-        toSend[i]["_id"] = allElements[i].getAttribute("data-id");
-        toSend[i]["slug"] = allElements[i].innerText;
-        toSend[i]["order"] = i;
+        let itemId = allElements[i].getAttribute("data-id");
+        toSend.push({ _id: itemId, order: i, title: allElements[i].innerText });
       }
-      console.log(toSend);
 
-      fetch("http://localhost:8080", {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({arr:toSend}),
-      })
-        .then((res) => res.json())
-        .then((data) => console.log(data))
-        .catch((err) => console.log(err));
+      this.dispatchEvent(
+        new CustomEvent("updateOrderClick", {
+          detail: { data: JSON.stringify(toSend) },
+        })
+      );
+      //   document.body.style.display = "none";
     });
 
     this.draggables.forEach((draggable) => {
@@ -114,62 +200,4 @@ class HelloWorld extends HTMLElement {
     }
   }
 }
-customElements.define("hello-world", HelloWorld);
-
-// function myfetch(toSend){
-//     fetch("https://yehudaba.wixsite.com/my-site-2/_functions-dev/needToUptade", {
-//         method: 'POST',
-//         headers: {
-//           'Content-Type': 'application/json',
-//         },
-//         body: JSON.stringify({ arr: toSend }),
-//       })
-//         .then((res) => res.json())
-//         .then((data) => console.log(data))
-//         .catch((err) => console.log(err));
-// }
-
-// const this.draggables = document.querySelectorAll(".draggable");
-// const this.containers = document.querySelectorAll(".container");
-
-// this.draggables.forEach((draggable) => {
-//   draggable.addEventListener("dragstart", () => {
-//     draggable.classList.add("dragging");
-//   });
-
-//   draggable.addEventListener("dragend", () => {
-//     draggable.classList.remove("dragging");
-//   });
-// });
-
-// this.containers.forEach((container) => {
-//   container.addEventListener("dragover", (e) => {
-//     e.preventDefault();
-//     const afterElement = getDragAfterElement(container, e.clientY);
-//     const draggable = document.querySelector(".dragging");
-//     if (afterElement == null) {
-//       container.appendChild(draggable);
-//     } else {
-//       container.insertBefore(draggable, afterElement);
-//     }
-//   });
-// });
-
-// function getDragAfterElement(container, y) {
-//   const draggableElements = [
-//     ...container.querySelectorAll(".draggable:not(.dragging)"),
-//   ];
-
-//   return draggableElements.reduce(
-//     (closest, child) => {
-//       const box = child.getBoundingClientRect();
-//       const offset = y - box.top - box.height / 2;
-//       if (offset < 0 && offset > closest.offset) {
-//         return { offset: offset, element: child };
-//       } else {
-//         return closest;
-//       }
-//     },
-//     { offset: Number.NEGATIVE_INFINITY }
-//   ).element;
-// }
+customElements.define("sortable-list", SortableList);
